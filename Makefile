@@ -1,0 +1,240 @@
+PYTHON2_CMD   ?= python2
+PYTEST         = py.test
+
+PREFIX         = /usr/local
+EPREFIX        = $(PREFIX)
+
+LIBINSTALLDIR  = $(EPREFIX)/lib
+DATADIR        = $(PREFIX)/share
+MANPREFIX      = $(PREFIX)/share
+# /etc if PREFIX is /usr, $PREFIX/etc otherwise.
+ETCDIR        := $(shell [ "$(PREFIX)" = "/usr" ] && echo /etc || echo "$(PREFIX)/etc")
+XDGCONFDIR     = $(ETCDIR)/xdg
+
+# Find bash-completion's completions directory, first by checking pkg-config,
+# then using a hard-coded path. Override BASHCOMPDIR if it's still wrong for
+# your OS.
+BASHCOMPDIR   := $(shell pkg-config --define-variable=prefix="$(PREFIX)" \
+  --variable=completionsdir bash-completion 2> /dev/null \
+  || echo "$(PREFIX)/share/bash-completion/completions")
+
+EXAILEBINDIR   = $(DESTDIR)$(EPREFIX)/bin
+EXAILELIBDIR   = $(DESTDIR)$(LIBINSTALLDIR)/exaile
+EXAILESHAREDIR = $(DESTDIR)$(DATADIR)/exaile
+EXAILECONFDIR  = $(DESTDIR)$(XDGCONFDIR)/exaile
+EXAILEMANDIR   = $(DESTDIR)$(MANPREFIX)/man
+
+.PHONY: dist test completion coverage clean sanitycheck builddir
+
+all: compile completion locale manpage
+	@echo "Ready to install..."
+
+# The no_locale stuff is by request of BSD people, please ensure
+# all methods that deal with locale stuff have a no_locale variant
+all_no_locale: compile manpage
+	@echo "Ready to install..."
+
+builddir:
+	mkdir -p build
+
+compile:
+	$(PYTHON2_CMD) -m compileall -q xl xlgui
+	-$(PYTHON2_CMD) -O -m compileall -q xl xlgui
+	$(MAKE) -C plugins compile
+
+make-install-dirs:
+	install -d -m 755 $(EXAILEBINDIR)
+	install -d -m 755 $(EXAILELIBDIR)
+	install -d -m 755 $(EXAILELIBDIR)/xl
+	install -d -m 755 $(EXAILELIBDIR)/xl/externals
+	install -d -m 755 $(EXAILELIBDIR)/xl/metadata
+	install -d -m 755 $(EXAILELIBDIR)/xl/player
+	install -d -m 755 $(EXAILELIBDIR)/xl/player/gst
+	install -d -m 755 $(EXAILELIBDIR)/xl/migrations
+	install -d -m 755 $(EXAILELIBDIR)/xl/migrations/database
+	install -d -m 755 $(EXAILELIBDIR)/xl/migrations/settings
+	install -d -m 755 $(EXAILELIBDIR)/xl/trax
+	install -d -m 755 $(EXAILELIBDIR)/xlgui
+	install -d -m 755 $(EXAILELIBDIR)/xlgui/panel
+	install -d -m 755 $(EXAILELIBDIR)/xlgui/preferences
+	install -d -m 755 $(EXAILELIBDIR)/xlgui/widgets
+	install -d -m 755 $(EXAILESHAREDIR)
+	install -d -m 755 $(EXAILESHAREDIR)/data
+	install -d -m 755 $(EXAILESHAREDIR)/data/images/16x16
+	install -d -m 755 $(EXAILESHAREDIR)/data/images/22x22
+	install -d -m 755 $(EXAILESHAREDIR)/data/images/24x24
+	install -d -m 755 $(EXAILESHAREDIR)/data/images/32x32
+	install -d -m 755 $(EXAILESHAREDIR)/data/images/48x48
+	install -d -m 755 $(EXAILESHAREDIR)/data/images/scalable
+	install -d -m 755 $(EXAILESHAREDIR)/data/ui
+	install -d -m 755 $(EXAILESHAREDIR)/data/ui/panel
+	install -d -m 755 $(EXAILESHAREDIR)/data/ui/preferences
+	install -d -m 755 $(EXAILESHAREDIR)/data/ui/preferences/widgets
+	install -d -m 755 $(EXAILESHAREDIR)/data/ui/widgets
+	install -d -m 755 $(DESTDIR)$(DATADIR)/pixmaps
+	install -d -m 755 $(DESTDIR)$(DATADIR)/appdata
+	install -d -m 755 $(DESTDIR)$(DATADIR)/applications
+	install -d -m 755 $(DESTDIR)$(DATADIR)/dbus-1/services
+	install -d -m 755 $(EXAILEMANDIR)/man1
+	install -d -m 755 $(DESTDIR)$(BASHCOMPDIR)
+	install -d -m 755 $(EXAILECONFDIR)
+
+uninstall:
+	rm -f  $(EXAILEBINDIR)/exaile
+	rm -rf $(EXAILELIBDIR)
+	rm -rf $(EXAILESHAREDIR)
+	rm -rf $(EXAILECONFDIR)
+	rm -f $(DESTDIR)$(DATADIR)/applications/exaile.desktop
+	rm -f $(DESTDIR)$(DATADIR)/pixmaps/exaile.png
+	rm -f $(DESTDIR)$(DATADIR)/appdata/exaile.appdata.xml
+	rm -f $(DESTDIR)$(DATADIR)/dbus-1/services/org.exaile.Exaile.service
+	rm -f $(EXAILEMANDIR)/man1/exaile.1.gz
+	rm -f $(DESTDIR)$(BASHCOMPDIR)/exaile
+	$(MAKE) -C plugins uninstall
+	find $(DESTDIR)$(DATADIR)/locale -name "exaile.mo" -exec rm -f {} \;
+
+install: install-target install-locale
+
+install_no_locale: install-target
+
+install-target: make-install-dirs
+	install -m 644 exaile.py $(EXAILELIBDIR)
+	-install -m 644 xl/*.py[co] $(EXAILELIBDIR)/xl
+	install -m 644 xl/*.py $(EXAILELIBDIR)/xl
+	-install -m 644 xl/externals/*.py[co] $(EXAILELIBDIR)/xl/externals
+	install -m 644 xl/externals/*.py $(EXAILELIBDIR)/xl/externals
+	-install -m 644 xl/metadata/*.py[co] $(EXAILELIBDIR)/xl/metadata
+	install -m 644 xl/metadata/*.py $(EXAILELIBDIR)/xl/metadata
+	-install -m 644 xl/player/*.py[co] $(EXAILELIBDIR)/xl/player
+	install -m 644 xl/player/*.py $(EXAILELIBDIR)/xl/player
+	-install -m 644 xl/player/gst/*.py[co] $(EXAILELIBDIR)/xl/player/gst
+	install -m 644 xl/player/gst/*.py $(EXAILELIBDIR)/xl/player/gst
+	-install -m 644 xl/migrations/*.py[co] $(EXAILELIBDIR)/xl/migrations
+	install -m 644 xl/migrations/*.py $(EXAILELIBDIR)/xl/migrations
+	-install -m 644 xl/migrations/database/*.py[co] $(EXAILELIBDIR)/xl/migrations/database/
+	install -m 644 xl/migrations/database/*.py $(EXAILELIBDIR)/xl/migrations/database/
+	-install -m 644 xl/migrations/settings/*.py[co] $(EXAILELIBDIR)/xl/migrations/settings/
+	install -m 644 xl/migrations/settings/*.py $(EXAILELIBDIR)/xl/migrations/settings/
+	-install -m 644 xl/trax/*.py[co] $(EXAILELIBDIR)/xl/trax
+	install -m 644 xl/trax/*.py $(EXAILELIBDIR)/xl/trax
+	-install -m 644 xlgui/*.py[co] $(EXAILELIBDIR)/xlgui
+	install -m 644 xlgui/*.py $(EXAILELIBDIR)/xlgui
+	-install -m 644 xlgui/panel/*.py[co] $(EXAILELIBDIR)/xlgui/panel
+	install -m 644 xlgui/panel/*.py $(EXAILELIBDIR)/xlgui/panel
+	-install -m 644 xlgui/preferences/*.py[co] $(EXAILELIBDIR)/xlgui/preferences
+	install -m 644 xlgui/preferences/*.py $(EXAILELIBDIR)/xlgui/preferences
+	-install -m 644 xlgui/widgets/*.py[co] $(EXAILELIBDIR)/xlgui/widgets
+	install -m 644 xlgui/widgets/*.py $(EXAILELIBDIR)/xlgui/widgets
+	install -m 644 data/images/16x16/*.png $(EXAILESHAREDIR)/data/images/16x16
+	install -m 644 data/images/22x22/*.png $(EXAILESHAREDIR)/data/images/22x22
+	install -m 644 data/images/24x24/*.png $(EXAILESHAREDIR)/data/images/24x24
+	install -m 644 data/images/32x32/*.png $(EXAILESHAREDIR)/data/images/32x32
+	install -m 644 data/images/48x48/*.png $(EXAILESHAREDIR)/data/images/48x48
+	install -m 644 data/images/128x128/*.png $(EXAILESHAREDIR)/data/images/128x128
+	install -m 644 data/images/scalable/*.svg $(EXAILESHAREDIR)/data/images/scalable
+	install -m 644 data/images/*.png $(EXAILESHAREDIR)/data/images
+	install -m 644 data/images/128x128/exaile.png \
+		$(DESTDIR)$(DATADIR)/pixmaps/exaile.png
+	install -m 644 data/ui/*.ui $(EXAILESHAREDIR)/data/ui
+	install -m 644 data/ui/panel/*.ui $(EXAILESHAREDIR)/data/ui/panel
+	install -m 644 data/ui/preferences/*.ui $(EXAILESHAREDIR)/data/ui/preferences
+	install -m 644 data/ui/preferences/widgets/*.ui $(EXAILESHAREDIR)/data/ui/preferences/widgets
+	install -m 644 data/ui/widgets/*.ui $(EXAILESHAREDIR)/data/ui/widgets
+	install -m 644 data/exaile.desktop \
+		$(DESTDIR)$(DATADIR)/applications/
+	install -m 644 data/exaile.appdata.xml \
+		$(DESTDIR)$(DATADIR)/appdata/
+	-install -m 644 build/exaile.1.gz $(EXAILEMANDIR)/man1/
+	-install -m 644 build/exaile.bash-completion $(DESTDIR)$(BASHCOMPDIR)/exaile
+	install -m 644 data/config/settings.ini $(EXAILECONFDIR)
+	tools/generate-launcher "$(DESTDIR)" "$(PREFIX)" "$(EPREFIX)" "$(LIBINSTALLDIR)" \
+		"$(PYTHON2_CMD)" && \
+	  chmod 755 $(EXAILEBINDIR)/exaile
+	sed "s|\@bindir\@|$(EPREFIX)/bin|" data/org.exaile.Exaile.service.in > \
+		$(DESTDIR)$(DATADIR)/dbus-1/services/org.exaile.Exaile.service && \
+		chmod 644 $(DESTDIR)$(DATADIR)/dbus-1/services/org.exaile.Exaile.service
+	$(MAKE) -C plugins install
+
+
+# List a *.mo file for any *.po file
+LOCALE_SRCS=$(wildcard po/*.po)
+LOCALE_OBJS=$(LOCALE_SRCS:.po=.mo)
+
+%.mo: %.po po/messages.pot
+	$(eval LOCALE_DIR := `echo $< | sed "s|^po/|build/locale/|" | sed "s|.po|/LC_MESSAGES|"`)
+	mkdir -p $(LOCALE_DIR)
+	-msgmerge -q -o - $< po/messages.pot | msgfmt -c -o $(LOCALE_DIR)/exaile.mo -
+
+locale: builddir $(LOCALE_OBJS)
+
+install-locale:
+	for f in `find build/locale -name exaile.mo` ; do \
+	  install -d -m 755 \
+	    `echo $$f | sed "s|^build|$(DESTDIR)$(DATADIR)|" | \
+	      xargs dirname` && \
+	  install -m 644 $$f \
+	    `echo $$f | sed "s|^build|$(DESTDIR)$(DATADIR)|"` ; \
+	  done
+
+
+plugins_dist:
+	$(MAKE) -C plugins dist
+
+manpage: builddir
+	LC_ALL=C help2man -n "music manager and player" -N ./exaile \
+	  | gzip -9 > build/exaile.1.gz
+
+completion: builddir
+	$(PYTHON2_CMD) tools/generate-completion.py > build/exaile.bash-completion
+
+clean:
+	-find . -name "*.~[0-9]~" -exec rm -f {} \;
+	-find . -name "*.py[co]" -exec rm -f {} \;
+	rm -rf build/
+	$(MAKE) -C plugins clean
+	# for older versions of this Makefile:
+	find po/* -depth -type d -exec rm -r {} \;
+	rm -f exaile.1.gz
+	rm -f exaile.bash-completion
+
+po/messages.pot: pot
+
+# The "LC_ALL=C" disables any locale-dependent sort behavior.
+# The "[type: gettext/glade]" helps intltool recognize .ui files as glade format.
+pot:
+	(export LC_ALL=C && \
+	  echo "[encoding: UTF-8]" > po/POTFILES.in && \
+	  find xl -name "*.py" | sort >> po/POTFILES.in && \
+	  find xlgui -name "*.py" | sort >> po/POTFILES.in && \
+	  find data/ui/ -name "*.ui" | sort | sed 's/^/[type: gettext\/glade]/' >> po/POTFILES.in && \
+	  find plugins -name "*.py" | sort  >> po/POTFILES.in && \
+	  find plugins -name "*.ui" | sort | sed 's/^/[type: gettext\/glade]/' >> po/POTFILES.in && \
+	  find plugins -name PLUGININFO | sort >> po/POTFILES.in)
+	(cd po && XGETTEXT_ARGS="--language=Python --add-comments=TRANSLATORS" \
+	  intltool-update --pot --gettext-package=messages --verbose)
+
+potball: builddir
+	tar --bzip2 --format=posix -cf build/exaile-po.tar.bz2 po/ \
+	    --transform s/po/./
+
+dist:
+	mkdir -p dist
+	rm -rf dist/copy
+	git archive HEAD --prefix=copy/ | tar -x -C dist
+	./tools/dist.sh
+	rm -rf dist/copy
+
+test:
+	EXAILE_DIR=$(shell pwd) PYTHONPATH=$(shell pwd) $(PYTEST) tests
+
+test_coverage:
+	rm -rf coverage/
+	rm -f .coverage
+	EXAILE_DIR=$(shell pwd) nosetests -w tests --with-coverage --cover-package=xl; \
+	mkdir -p coverage; \
+	coverage html -d coverage
+
+lint_errors:
+	-pylint -e --rcfile tools/pylint.cfg xl xlgui 2> /dev/null
+
+sanitycheck: lint_errors test
